@@ -1,0 +1,100 @@
+use kai_ast::ast::{
+  Function,
+  FuncArg,
+  Stmt,
+  Expr,
+  Opcode,
+  Type,
+};
+
+grammar;
+
+// MACROS
+
+Comma<T>: Vec<T> = {
+  <v:(<T> ",")*> <e:T?> => match e {
+      None => v,
+      Some(e) => {
+          let mut v = v;
+          v.push(e);
+          v
+      }
+  }
+};
+
+// END MACROS
+
+pub Function: Box<Function> = {
+  "function" <i:Ident> <fa:FuncArgs> ":" <ret_ty:Type> <b:Block> => Box::new(
+    Function {
+      ident: i,
+      args: fa,
+      body: b,
+      ret_ty: ret_ty,
+    }),
+};
+
+FuncArgs: Vec<Box<FuncArg>> = {
+  "(" <al:FuncArgList> ")" => al,
+};
+
+FuncArgList = Comma<FuncArg>;
+
+FuncArg: Box<FuncArg> = {
+  <i:Ident> ":" <t:Ident> => Box::new(FuncArg {ty_ident: t, ident: i}),
+};
+
+Block: Vec<Box<Stmt>> = {
+  "{" <sl:StmtList> "}" => sl,
+};
+
+StmtList: Vec<Box<Stmt>> = {
+  () => vec![],
+  <l:StmtList> <s:StmtWrapper> => (| | {let mut l = l; l.push(s); l})(),
+};
+
+StmtWrapper: Box<Stmt> = {
+  <s:Stmt> ";" => s,
+};
+
+Stmt: Box<Stmt> = {
+  "let" <i:Ident> "=" <e:Expr> => Box::new(Stmt::VarDecl(i, e)),
+  <i:Ident> "=" <e:Expr> => Box::new(Stmt::VarAsgn(i, e)),
+
+  "return" <e:Expr> => Box::new(Stmt::Return(e)),
+};
+
+Expr: Box<Expr> = {
+  <l:Expr> <o:ExprOp> <r:Factor> => Box::new(Expr::Binop(o, l, r)),
+  Factor,
+};
+
+ExprOp: Opcode = {
+  "+" => Opcode::Add,
+  "-" => Opcode::Sub,
+};
+
+Factor: Box<Expr> = {
+  <l:Factor> <o:FactorOp> <r:Term> => Box::new(Expr::Binop(o, l, r)),
+  Term,
+};
+
+FactorOp: Opcode = {
+  "*" => Opcode::Mul,
+  "/" => Opcode::Div,
+};
+
+Term: Box<Expr> = {
+  <b:Bool> => Box::new(Expr::Bool(b == "true" ? true : false)),
+  Num => Box::new(Expr::Num(<>)),
+  Ident => Box::new(Expr::Ident(<>)),
+  "(" <e:Expr> ")" => e,
+};
+
+Type: Box<Type> = {
+  "int" => Box::new(Type::)
+}
+
+Bool: String = <s:r"true|false"> => s.to_string();
+Num: String = <s:r"[0-9]+"> => s.to_string();
+Ident: String = <s:r"[a-zA-Z_]+\w*"> => s.to_string();

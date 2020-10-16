@@ -1,0 +1,6 @@
+function main(): int {
+  x = 5;
+  x = true;
+
+  return x;
+}

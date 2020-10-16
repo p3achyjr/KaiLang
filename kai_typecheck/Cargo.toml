@@ -1,0 +1,10 @@
+[package]
+authors = ["axlui"]
+edition = "2018"
+name = "kai_typecheck"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+kai_ast = {path: "../kai_ast"}

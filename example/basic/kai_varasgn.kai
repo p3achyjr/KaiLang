@@ -1,0 +1,8 @@
+function main(): int {
+  let x = 5;
+  x = 6;
+  x = 2;
+  x = 1 + 2 * 5;
+
+  return x;
+}

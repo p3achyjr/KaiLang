@@ -1,0 +1,7 @@
+function main(): int {
+  let x = 0;
+  x = 1;
+  let x = 2;
+
+  return x;
+}

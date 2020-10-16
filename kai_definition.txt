@@ -1,0 +1,92 @@
+Kai Lang
+
+Terms:
+
+expr ::= n (int literal)
+  | s (string literal)
+  | true | false (bool literal)
+  | x, y, z (identifiers)
+  | e1 (+) e2 (int binop)
+  | e1.e2 (concat)
+  | e1 (&&) e2 (logical binop)
+  | e (e1, ..., en) (function application)
+
+
+stmtList ::= nil (empty)
+  | cons (s, L) (cons)
+
+stmt ::= decl (x, e)
+  | asgn (x, e)
+  | if (e, s1, s2)
+  | while (e, s)
+  | return (e)
+
+globals ::= function ((x1: t1, ..., xn: tn), tret, body)
+
+
+Types:
+
+ty ::= int
+  | bool
+  | string
+  | f (t1, ..., tn) -> tret
+
+
+Rules:
+
+
+Statements:
+
+---------
+nil ~> {}
+
+C |- e => t,  C, x <= t |- L ~> C'
+--------------------------------
+C |- cons(decl(x, e), L) ~> C', x |- t
+
+C |- e <= t, C |- x <= t, C |- L ~> C'
+-----------------------------------
+C |- cons(asgn(x, e), L) |- C'
+
+C |- e <= bool, C |- s1 ~> C1, C |- s2 ~> C2, C v (C1 ^ C2) |- L ~> C'
+--------------------------------------------
+C |- cons(if(x, L1, L2), L) |- C' v (C1 ^ C2)
+
+C |- e <= bool, C |- L1 ~> C1, C |- L2 ~> C'
+-------------------------------
+C |- cons(while(e, L1), L2) |- C'
+
+L = nil, C |- e => tret
+-----------------------------
+C |- cons(return(e), L) ~> {}
+
+
+Expressions:
+
+--------
+C |- n => int
+
+-----------
+C |- s => string
+
+-------------------
+C |- true, false => bool
+
+x : t in C
+------------
+C |- x => t
+
+C |- x => t
+-----------
+C |- x <= t
+
+C |- x => t
+-----------
+C |- x <= t
+
+
+
+  | x, y, z (variables)
+  | e1 (+) e2 (int binop)
+  | e1.e2 (concat)
+  | e1 (&&) e2 (logical binop)
