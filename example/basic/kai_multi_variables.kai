@@ -1,0 +1,13 @@
+function main(): int {
+  let x = 4;
+  let y = 5;
+  let z = true;
+  let z0 = false;
+
+  let x1 = x + y;
+  let x2 = z || z0 && z;
+  let x3 = x < y;
+  let x4 = x3 || false;
+
+  return 0;
+}

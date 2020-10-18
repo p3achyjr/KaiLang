@@ -1,10 +1,11 @@
 [package]
 authors = ["axlui"]
 edition = "2018"
-name = "kai_ast"
+name = "kai_llvm_gen"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kai_common_types = {path = "../kai_common_types"}
+libc = "0.2"
+llvm-sys = "100"

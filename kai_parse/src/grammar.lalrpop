@@ -3,9 +3,9 @@ use kai_ast::ast::{
   FuncArg,
   Stmt,
   Expr,
-  Opcode,
   Type,
 };
+use kai_common_types::ops::Opcode;
 
 grammar;
 
@@ -24,52 +24,92 @@ Comma<T>: Vec<T> = {
 
 // END MACROS
 
-pub Function: Box<Function> = {
-  "function" <i:Ident> <fa:FuncArgs> ":" <ret_ty:Type> <b:Block> => Box::new(
+pub Function: Function = {
+  "function" <i:Ident> <fa:FuncArgs> ":" <ret_ty:Type> <b:Block> => 
     Function {
       ident: i,
       args: fa,
       body: b,
       ret_ty: ret_ty,
-    }),
+    },
 };
 
-FuncArgs: Vec<Box<FuncArg>> = {
+FuncArgs: Vec<FuncArg> = {
   "(" <al:FuncArgList> ")" => al,
 };
 
 FuncArgList = Comma<FuncArg>;
 
-FuncArg: Box<FuncArg> = {
-  <i:Ident> ":" <t:Ident> => Box::new(FuncArg {ty_ident: t, ident: i}),
+FuncArg: FuncArg = {
+  <i:Ident> ":" <t:Type> => FuncArg {ty: t, ident: i},
 };
 
-Block: Vec<Box<Stmt>> = {
+Block: Vec<Stmt> = {
   "{" <sl:StmtList> "}" => sl,
 };
 
-StmtList: Vec<Box<Stmt>> = {
+StmtList: Vec<Stmt> = {
   () => vec![],
   <l:StmtList> <s:StmtWrapper> => (| | {let mut l = l; l.push(s); l})(),
 };
 
-StmtWrapper: Box<Stmt> = {
+StmtWrapper: Stmt = {
   <s:Stmt> ";" => s,
 };
 
-Stmt: Box<Stmt> = {
-  "let" <i:Ident> "=" <e:Expr> => Box::new(Stmt::VarDecl(i, e)),
-  <i:Ident> "=" <e:Expr> => Box::new(Stmt::VarAsgn(i, e)),
+Stmt: Stmt = {
+  "let" <i:Ident> "=" <e:Expr> => Stmt::VarDecl(i, *e),
+  <i:Ident> "=" <e:Expr> => Stmt::VarAsgn(i, *e),
 
-  "return" <e:Expr> => Box::new(Stmt::Return(e)),
+  "return" <e:Expr> => Stmt::Return(*e),
 };
 
 Expr: Box<Expr> = {
-  <l:Expr> <o:ExprOp> <r:Factor> => Box::new(Expr::Binop(o, l, r)),
+  <l: Expr> <o: OrOp> <r: AndT> => Box::new(Expr::Binop(o, l, r)),
+  AndT,
+};
+
+OrOp: Opcode = {
+  "||" => Opcode::LogOr,
+};
+
+AndT: Box<Expr> = {
+  <l: AndT> <o: AndOp> <r: EqT> => Box::new(Expr::Binop(o, l, r)),
+  EqT,
+};
+
+AndOp: Opcode = {
+  "&&" => Opcode::LogAnd,
+};
+
+EqT: Box<Expr> = {
+  <l: EqT> <o: EqOp> <r: CmpT> => Box::new(Expr::Binop(o, l, r)),
+  CmpT,
+};
+
+EqOp: Opcode = {
+  "==" => Opcode::LogEq,
+  "!=" => Opcode::LogNeq,
+};
+
+CmpT: Box<Expr> = {
+  <l: CmpT> <o: CmpOp> <r: Arith> => Box::new(Expr::Binop(o, l, r)),
+  Arith,
+};
+
+CmpOp: Opcode = {
+  "<" => Opcode::Lt,
+  "<=" => Opcode::Leq,
+  ">" => Opcode::Gt,
+  ">=" => Opcode::Geq,
+};
+
+Arith: Box<Expr> = {
+  <l:Arith> <o:ArithOp> <r:Factor> => Box::new(Expr::Binop(o, l, r)),
   Factor,
 };
 
-ExprOp: Opcode = {
+ArithOp: Opcode = {
   "+" => Opcode::Add,
   "-" => Opcode::Sub,
 };
@@ -82,19 +122,24 @@ Factor: Box<Expr> = {
 FactorOp: Opcode = {
   "*" => Opcode::Mul,
   "/" => Opcode::Div,
+  "%" => Opcode::Mod,
 };
 
 Term: Box<Expr> = {
-  <b:Bool> => Box::new(Expr::Bool(b == "true" ? true : false)),
+  <b:Bool> => Box::new(Expr::Bool(b)),
   Num => Box::new(Expr::Num(<>)),
   Ident => Box::new(Expr::Ident(<>)),
   "(" <e:Expr> ")" => e,
 };
 
-Type: Box<Type> = {
-  "int" => Box::new(Type::)
-}
+Type: Type = {
+  "int" => Type::Int,
+  "bool" => Type::Bool,
+};
 
-Bool: String = <s:r"true|false"> => s.to_string();
-Num: String = <s:r"[0-9]+"> => s.to_string();
+Bool: bool = {
+  "true" => true,
+  "false" => false,
+};
+Num: i32 = <s:r"[0-9]+"> => s.to_string().parse::<i32>().unwrap();
 Ident: String = <s:r"[a-zA-Z_]+\w*"> => s.to_string();
