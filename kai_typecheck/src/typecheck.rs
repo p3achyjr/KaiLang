@@ -1,11 +1,7 @@
+use crate::TypeCheckCtx;
 use kai_ast::ast;
 use kai_common_types::ops::Opcode;
 use std::collections::HashMap;
-
-pub struct TypeCheckCtx {
-  pub fn_type_map: HashMap<String, ast::Type>,
-  // var_map: HashMap<String, ast::Type>,
-}
 
 impl TypeCheckCtx {
   pub fn populate_fn_types(&mut self, ast_func: &ast::Function) {

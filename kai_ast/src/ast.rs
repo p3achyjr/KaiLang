@@ -43,3 +43,18 @@ impl Default for Type {
     Type::Invalid
   }
 }
+
+pub trait IsLiteral {
+  fn is_literal(&self) -> bool;
+}
+
+impl IsLiteral for Expr {
+  fn is_literal(&self) -> bool {
+    match *self {
+      Expr::Num(_) => true,
+      Expr::Bool(_) => true,
+      Expr::Ident(_) => true,
+      _ => false,
+    }
+  }
+}

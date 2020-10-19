@@ -4,8 +4,13 @@ use std::collections::HashMap;
 pub mod tests;
 pub mod typecheck;
 
+struct TypeCheckCtx {
+  fn_type_map: HashMap<String, ast::Type>,
+  // var_map: HashMap<String, ast::Type>,
+}
+
 pub fn typecheck(ast_func: &ast::Function) -> HashMap<String, ast::Type> {
-  let mut type_check_ctx = typecheck::TypeCheckCtx {
+  let mut type_check_ctx = TypeCheckCtx {
     fn_type_map: HashMap::new(),
   };
 
