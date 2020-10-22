@@ -34,7 +34,7 @@ impl IrGenContext {
   fn gen_ir_funcarg(&self, arg: &ast::FuncArg) -> IrFuncArg {
     IrFuncArg {
       ty: self.gen_ir_type(&arg.ty),
-      ident: arg.ident.clone(),
+      ident: IrVar::Ident(arg.ident.clone()),
     }
   }
 
@@ -62,8 +62,6 @@ impl IrGenContext {
         }
       }
     }
-
-    println!("WHAHT {:#?}", cmds);
 
     cmds
   }
@@ -147,15 +145,10 @@ impl IrGenContext {
     e1: &ast::Expr,
     e2: &ast::Expr,
   ) -> Vec<IrCmd> {
-    let (tmp1, tmp2) = (self.get_tmp_and_incr(), self.get_tmp_and_incr());
-    let cmds1 = self.gen_ir_expr_and_asgn(tmp1.clone(), e1);
-    let cmds2 = self.gen_ir_expr_and_asgn(tmp2.clone(), e2);
+    let cmds1 = self.gen_ir_expr_and_asgn(target.clone(), e1);
+    let cmds2 = self.gen_ir_expr_and_asgn(target.clone(), e2);
 
-    let (label1, label2, label_collect) = (
-      self.get_label_and_incr(),
-      self.get_label_and_incr(),
-      self.get_label_and_incr(),
-    );
+    let (label1, label2) = (self.get_label_and_incr(), self.get_label_and_incr());
 
     /*
      * Determines which block to jump to
@@ -165,27 +158,20 @@ impl IrGenContext {
      * if we are in || case, we do the opposite.
      */
     let cond = if op == Opcode::LogAnd {
-      IrCmd::Cond(IrLiteral::Var(tmp1.clone()), label1, label2)
+      IrCmd::Cond(IrLiteral::Var(target.clone()), label1, label2)
     } else {
-      IrCmd::Cond(IrLiteral::Var(tmp1.clone()), label2, label1)
+      IrCmd::Cond(IrLiteral::Var(target.clone()), label2, label1)
     };
     match op {
       Opcode::LogAnd => {
         let mut cmds = cmds1;
-        // jump to label if tmp1 is true, label2 o/w
+        // jump to label1 if tmp1 is true, label2 o/w
         cmds.extend(vec![cond, IrCmd::Label(label1)]);
         cmds.extend(cmds2);
         cmds.extend(vec![
-          // run op on results
-          IrCmd::Asgn(
-            target.clone(),
-            IrExpr::Binop(op, IrLiteral::Var(tmp1), IrLiteral::Var(tmp2)),
-          ),
-          IrCmd::Goto(label_collect), // go to convergence point
+          // value depends solely on tmp2
           IrCmd::Label(label2),
-          // we reach here only if tmp1 is false, so result of computation is false
-          IrCmd::Asgn(target.clone(), expr_from_lit(IrLiteral::Bool(false))),
-          IrCmd::Label(label_collect), // convergence point
+          // we reach here only if tmp1 is false, so result of computation is falset
         ]);
         cmds
       }
@@ -195,18 +181,8 @@ impl IrGenContext {
         cmds.extend(vec![cond, IrCmd::Label(label1)]);
         cmds.extend(cmds2);
         cmds.extend(vec![
-          IrCmd::Asgn(
-            target.clone(),
-            IrExpr::Binop(
-              op,
-              IrLiteral::Var(tmp1.clone()),
-              IrLiteral::Var(tmp2.clone()),
-            ),
-          ),
-          IrCmd::Goto(label_collect),
+          // value depends solely on tmp2
           IrCmd::Label(label2),
-          IrCmd::Asgn(target.clone(), expr_from_lit(IrLiteral::Bool(true))),
-          IrCmd::Label(label_collect), // convergence point
         ]);
         cmds
       }

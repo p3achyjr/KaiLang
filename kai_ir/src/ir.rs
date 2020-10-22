@@ -13,7 +13,7 @@ pub struct IrFunction {
 #[derive(Debug)]
 pub struct IrFuncArg {
   pub ty: IrType,
-  pub ident: String,
+  pub ident: IrVar,
 }
 
 #[derive(Debug)]
@@ -38,20 +38,20 @@ pub enum IrLiteral {
   Var(IrVar),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum IrVar {
   Ident(String),
   Temp(i32),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum IrType {
   Int,
   Bool,
   Addr, // addresses
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct IrLabel {
   pub label: i32,
 }
@@ -79,8 +79,8 @@ impl fmt::Display for IrFunction {
     for arg in &self.args {
       arg_tokens.push(arg.to_string());
     }
-    for stmt in &self.body {
-      stmt_tokens.push(stmt.to_string());
+    for i in 0..self.body.len() {
+      stmt_tokens.push(format!("{}: {}", i, self.body[i].to_string()));
     }
     return write!(
       f,
@@ -151,6 +151,6 @@ impl fmt::Display for IrType {
 
 impl fmt::Display for IrLabel {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "__label_{}", self.label)
+    write!(f, ".label_{}", self.label)
   }
 }

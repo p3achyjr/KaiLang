@@ -19,7 +19,13 @@ impl TypeCheckCtx {
   }
 
   pub fn typecheck_function(&self, ast_func: &ast::Function) -> HashMap<String, ast::Type> {
-    self.typecheck_stmt_list(&ast_func.body, &mut HashMap::new(), &ast_func.ret_ty)
+    let mut var_ty_map = HashMap::new();
+    for arg in &ast_func.args {
+      var_ty_map.insert(arg.ident.clone(), arg.ty.clone());
+    }
+    let mut body_map = self.typecheck_stmt_list(&ast_func.body, &mut var_ty_map, &ast_func.ret_ty);
+    body_map.extend(var_ty_map);
+    body_map
   }
 
   fn typecheck_stmt_list(

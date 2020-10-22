@@ -55,3 +55,19 @@ fn test_kai_arithmetic() -> io::Result<()> {
 
   Ok(())
 }
+
+#[test]
+fn test_kai_fn_args() -> io::Result<()> {
+  let mut dir = get_example_dir();
+  (*dir).push("basic/kai_fn_args.kai");
+
+  let prog = fs::read_to_string(*dir)?;
+  let parser = FunctionParser::new();
+  let ast = parser.parse(prog.as_str()).unwrap();
+  let var_ty_map = typecheck(&ast);
+
+  assert!(*var_ty_map.get("a").unwrap() == ast::Type::Int);
+  assert!(*var_ty_map.get("b").unwrap() == ast::Type::Bool);
+
+  Ok(())
+}
