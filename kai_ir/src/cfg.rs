@@ -1,24 +1,115 @@
 use crate::ir::*;
-use std::fmt;
 use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashSet, fmt};
 
 pub struct BasicBlock {
   ancestors: Vec<usize>,
   predecessors: Vec<usize>,
-  cmd_range: (usize, usize), // range of commands this basic block encapsulates
+  cmd_range: (usize, usize),
+  cmds: Vec<IrCmd>, // range of commands this basic block encapsulates
+  phis: Vec<IrCmd>, // phi functions that go at the top of this bb
 }
 
 pub struct ControlFlowGraph<'a> {
   pub basic_blocks: &'a mut Vec<BasicBlock>,
 }
 
+impl BasicBlock {
+  pub fn ancestors(&self) -> &Vec<usize> {
+    return &self.ancestors;
+  }
+
+  pub fn predecessors(&self) -> &Vec<usize> {
+    return &self.predecessors;
+  }
+
+  pub fn cmds(&self) -> &Vec<IrCmd> {
+    return &self.cmds;
+  }
+
+  pub fn cmds_mut(&mut self) -> &mut Vec<IrCmd> {
+    return &mut self.cmds;
+  }
+
+  pub fn phis(&self) -> &Vec<IrCmd> {
+    return &self.phis;
+  }
+
+  pub fn phis_mut(&mut self) -> &mut Vec<IrCmd> {
+    return &mut self.phis;
+  }
+
+  pub fn add_new_phi(&mut self, var: i32, ty: IrType) {
+    self
+      .phis
+      .push(IrCmd::Asgn(IrVar::Temp(var, ty, 0), IrExpr::Phi(vec![])));
+  }
+
+  // pub fn add_new_phi(&mut self, var: i32) {
+  //   self.phis.push((var, IrExpr::Phi(vec![])));
+  // }
+
+  // pub fn add_new_version(&mut self, var: i32, version: usize) {
+  //   for i in 0..self.phis.len() {
+  //     let (v, phi) = &self.phis[i];
+  //     if *v != var {
+  //       continue;
+  //     }
+  //     self.phis[i] = match phi {
+  //       IrExpr::Phi(phis) => {
+  //         phis.push(IrVar::Temp(var, version));
+  //         (*v, IrExpr::Phi(phis))
+  //       }
+  //       _ => panic!("Should never see non-PHI expr in BB"),
+  //     };
+
+  //     return;
+  //   }
+
+  //   // did not find existing phis, so add a new one
+  //   self
+  //     .phis
+  //     .push((var, IrExpr::Phi(vec![IrVar::Temp(var, version)])));
+  // }
+}
+
 impl<'a> ControlFlowGraph<'a> {
+  pub fn at(&self, u: usize) -> &BasicBlock {
+    &self.basic_blocks[u]
+  }
+
+  pub fn at_mut(&mut self, u: usize) -> &mut BasicBlock {
+    &mut self.basic_blocks[u]
+  }
+
+  pub fn basic_blocks(&self) -> &Vec<BasicBlock> {
+    return self.basic_blocks;
+  }
+
+  pub fn postorder(&self) -> Vec<usize> {
+    let mut ordering = vec![];
+    self._postorder(0, &mut ordering, &mut HashSet::new());
+
+    ordering
+  }
+
   pub fn build_cfg(&mut self, ir: &IrFunction) -> &ControlFlowGraph<'a> {
     let cmds = &ir.body;
     let label_to_line_map = self.find_labels(&ir.body);
     self.build_and_insert_block(cmds, 0, &label_to_line_map, &mut HashMap::new());
 
     self
+  }
+
+  fn _postorder(&self, u: usize, traversal: &mut Vec<usize>, visited: &mut HashSet<usize>) {
+    if visited.contains(&u) {
+      return;
+    }
+    visited.insert(u);
+    for v in self.basic_blocks[u].ancestors() {
+      self._postorder(*v, traversal, visited);
+    }
+    traversal.push(u);
   }
 
   fn find_labels(&self, cmds: &Vec<IrCmd>) -> HashMap<IrLabel, usize> {
@@ -34,11 +125,17 @@ impl<'a> ControlFlowGraph<'a> {
     map
   }
 
-  fn new_bb(&self, start: usize, end: usize) -> BasicBlock {
+  fn new_bb(&self, start: usize, end: usize, cmds: &Vec<IrCmd>) -> BasicBlock {
+    let mut section = vec![];
+    for i in start..end {
+      section.push(cmds[i].clone());
+    }
     BasicBlock {
       ancestors: vec![],
       predecessors: vec![],
       cmd_range: (start, end),
+      cmds: section,
+      phis: vec![],
     }
   }
 
@@ -80,7 +177,7 @@ impl<'a> ControlFlowGraph<'a> {
     for line_ in (line + 1)..cmds.len() {
       match cmds[line_] {
         IrCmd::Label(_) => {
-          let bb = self.new_bb(line, line_);
+          let bb = self.new_bb(line, line_, cmds);
           let bb_index = self.basic_blocks.len();
           self.basic_blocks.push(bb);
           line_bb_index_map.insert(line, bb_index);
@@ -90,7 +187,7 @@ impl<'a> ControlFlowGraph<'a> {
           return bb_index;
         }
         IrCmd::Goto(label) => {
-          let bb = self.new_bb(line, line_ + 1);
+          let bb = self.new_bb(line, line_ + 1, cmds);
           let bb_index = self.basic_blocks.len();
           self.basic_blocks.push(bb);
           line_bb_index_map.insert(line, bb_index);
@@ -104,7 +201,7 @@ impl<'a> ControlFlowGraph<'a> {
           return bb_index;
         }
         IrCmd::Cond(_, label1, label2) => {
-          let bb = self.new_bb(line, line_ + 1);
+          let bb = self.new_bb(line, line_ + 1, cmds);
           let bb_index = self.basic_blocks.len();
           self.basic_blocks.push(bb);
           line_bb_index_map.insert(line, bb_index);
@@ -125,7 +222,7 @@ impl<'a> ControlFlowGraph<'a> {
           return bb_index;
         }
         IrCmd::Return(_) => {
-          let bb = self.new_bb(line, line_ + 1);
+          let bb = self.new_bb(line, line_ + 1, cmds);
           let bb_index = self.basic_blocks.len();
           self.basic_blocks.push(bb);
           line_bb_index_map.insert(line, bb_index);
@@ -163,6 +260,19 @@ impl<'a> Display for ControlFlowGraph<'a> {
         self.basic_blocks[i].predecessors,
         self.basic_blocks[i].cmd_range,
       )?;
+    }
+
+    for i in 0..self.basic_blocks.len() {
+      write!(f, "{}:\n", i,)?;
+      write!(f, "phis: ")?;
+      for phi in &self.basic_blocks[i].phis {
+        write!(f, "{}\n", phi)?;
+      }
+      write!(f, "cmds: ")?;
+      for cmd in &self.basic_blocks[i].cmds {
+        write!(f, "{}\n", cmd)?;
+      }
+      write!(f, "\n")?;
     }
 
     Ok(())

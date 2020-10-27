@@ -1,0 +1,6 @@
+function main(): bool {
+  let a = 0;
+  let b = 4;
+
+  return a < b;
+}

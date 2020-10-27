@@ -1,12 +1,15 @@
+use std::collections::HashMap;
+
 use crate::{ir::*, IrTempConversionContext};
 
 impl IrTempConversionContext {
   pub fn convert_vars_to_temps(&mut self, ir: IrFunction) -> IrFunction {
     let ir_cmds = &ir.body;
 
+    // get maximum temp number before replacing ident vars
     for cmd in ir_cmds {
       match cmd {
-        IrCmd::Asgn(IrVar::Temp(n), _) => {
+        IrCmd::Asgn(IrVar::Temp(n, _, _), _) => {
           self.min_available_tmp = if *n >= self.min_available_tmp {
             n + 1
           } else {
@@ -29,11 +32,11 @@ impl IrTempConversionContext {
     let mut new_args = vec![];
     for arg in args {
       match arg.ident {
-        IrVar::Ident(s) => {
+        IrVar::Ident(s, ty) => {
           self.ident_tmp_map.insert(s, self.min_available_tmp);
           new_args.push(IrFuncArg {
             ty: arg.ty,
-            ident: IrVar::Temp(self.min_available_tmp),
+            ident: IrVar::Temp(self.min_available_tmp, ty, 0),
           });
           self.min_available_tmp += 1;
         }
@@ -48,22 +51,31 @@ impl IrTempConversionContext {
     let mut new_cmds = vec![];
     for cmd in cmds {
       match cmd {
-        IrCmd::Asgn(IrVar::Ident(s), expr) => {
-          self.ident_tmp_map.insert(s, self.min_available_tmp);
+        IrCmd::Asgn(IrVar::Ident(s, ty), expr) => {
+          let tmp_number = if self.ident_tmp_map.contains_key(&s) {
+            *self.ident_tmp_map.get(&s).unwrap()
+          } else {
+            self.ident_tmp_map.insert(s, self.min_available_tmp);
+            self.min_available_tmp
+          };
           new_cmds.push(IrCmd::Asgn(
-            IrVar::Temp(self.min_available_tmp),
+            IrVar::Temp(tmp_number, ty, 0),
             self.convert_vars_to_temps_expr(expr),
           ));
           self.min_available_tmp += 1;
         }
-        IrCmd::Cond(IrLiteral::Var(IrVar::Ident(s)), l1, l2) => {
+        IrCmd::Asgn(tmp, expr) => {
+          new_cmds.push(IrCmd::Asgn(tmp, self.convert_vars_to_temps_expr(expr)));
+          self.min_available_tmp += 1;
+        }
+        IrCmd::Cond(IrLiteral::Var(IrVar::Ident(s, ty)), l1, l2) => {
           new_cmds.push(IrCmd::Cond(
-            IrLiteral::Var(IrVar::Temp(*self.ident_tmp_map.get(&s).unwrap())),
+            IrLiteral::Var(IrVar::Temp(*self.ident_tmp_map.get(&s).unwrap(), ty, 0)),
             l1,
             l2,
           ));
         }
-        IrCmd::Return(expr) => new_cmds.push(IrCmd::Return(self.convert_vars_to_temps_expr(expr))),
+        IrCmd::Return(lit) => new_cmds.push(IrCmd::Return(self.convert_vars_to_temps_lit(lit))),
         _ => new_cmds.push(cmd),
       }
     }
@@ -79,15 +91,35 @@ impl IrTempConversionContext {
         self.convert_vars_to_temps_lit(lit1),
         self.convert_vars_to_temps_lit(lit2),
       ),
+      IrExpr::Phi(phis) => IrExpr::Phi(phis),
     }
   }
 
   fn convert_vars_to_temps_lit(&mut self, lit: IrLiteral) -> IrLiteral {
     match lit {
-      IrLiteral::Var(IrVar::Ident(s)) => {
-        IrLiteral::Var(IrVar::Temp(*self.ident_tmp_map.get(&s).unwrap()))
+      IrLiteral::Var(IrVar::Ident(s, ty)) => {
+        IrLiteral::Var(IrVar::Temp(*self.ident_tmp_map.get(&s).unwrap(), ty, 0))
       }
       _ => lit,
     }
   }
+}
+
+pub fn get_tmp_to_type_map(ir: &IrFunction) -> HashMap<i32, IrType> {
+  let mut tmp_to_ty_map = HashMap::new();
+  let cmds = &ir.body;
+
+  for cmd in cmds {
+    match cmd {
+      IrCmd::Asgn(IrVar::Temp(var, ty, _), _) => {
+        tmp_to_ty_map.insert(*var, *ty);
+      }
+      IrCmd::Asgn(IrVar::Ident(_, _), _) => {
+        panic!("Do not call get_tmp_to_type_map before calling convert_vars_to_tmps")
+      }
+      _ => (),
+    }
+  }
+
+  tmp_to_ty_map
 }

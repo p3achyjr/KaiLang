@@ -10,5 +10,6 @@ version = "0.1.0"
 # regex = "1"
 kai_ast = {path = "kai_ast/"}
 kai_ir = {path = "kai_ir/"}
+kai_llvm_gen = {path = "kai_llvm_gen/"}
 kai_parse = {path = "kai_parse/"}
 kai_typecheck = {path = "kai_typecheck/"}

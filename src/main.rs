@@ -1,4 +1,5 @@
 use kai_ir::ir_gen;
+use kai_llvm_gen::llvm_gen;
 use kai_parse::grammar::*;
 use kai_typecheck::typecheck;
 use std::path::{Path, PathBuf};
@@ -21,8 +22,11 @@ fn main() -> std::io::Result<()> {
   let parser = FunctionParser::new();
   let ast = parser.parse(&program).unwrap();
   // println!("ast: {:#?}", ast);
-  typecheck(&ast);
-  let ir = ir_gen(&ast);
-  println!("ir: {}", ir.to_string());
+  let var_ty_map = typecheck(&ast);
+  let ir = ir_gen(&ast, var_ty_map);
+  // println!("ir: {}", ir.to_string());
+  unsafe {
+    llvm_gen(&ir, &mut dir);
+  }
   Ok(())
 }

@@ -9,7 +9,7 @@ impl IrGenContext {
     IrFunction {
       ident: ast_func.ident.clone(),
       args: self.gen_ir_funcargs(&ast_func.args),
-      body: self.gen_ir_body(&ast_func.body),
+      body: self.gen_ir_body(&ast_func.body, self.gen_ir_type(&ast_func.ret_ty)),
       ret_ty: self.gen_ir_type(&ast_func.ret_ty),
     }
   }
@@ -34,30 +34,42 @@ impl IrGenContext {
   fn gen_ir_funcarg(&self, arg: &ast::FuncArg) -> IrFuncArg {
     IrFuncArg {
       ty: self.gen_ir_type(&arg.ty),
-      ident: IrVar::Ident(arg.ident.clone()),
+      ident: IrVar::Ident(arg.ident.clone(), self.gen_ir_type(&arg.ty)),
     }
   }
 
-  fn gen_ir_body(&mut self, stmts: &Vec<ast::Stmt>) -> Vec<IrCmd> {
+  fn gen_ir_body(&mut self, stmts: &Vec<ast::Stmt>, ret_ty: IrType) -> Vec<IrCmd> {
     let mut cmds = vec![];
     for stmt in stmts {
       match stmt {
         ast::Stmt::VarDecl(ident, expr) => {
-          let decl_cmds = self.gen_ir_expr_and_asgn(IrVar::Ident(ident.clone()), &expr);
+          let decl_cmds = self.gen_ir_expr_and_asgn(
+            IrVar::Ident(
+              ident.clone(),
+              self.gen_ir_type(self.var_ty_map.get(ident).unwrap()),
+            ),
+            &expr,
+          );
           cmds.extend(decl_cmds);
         }
         ast::Stmt::VarAsgn(ident, expr) => {
-          let asgn_cmds = self.gen_ir_expr_and_asgn(IrVar::Ident(ident.clone()), &expr);
+          let asgn_cmds = self.gen_ir_expr_and_asgn(
+            IrVar::Ident(
+              ident.clone(),
+              self.gen_ir_type(self.var_ty_map.get(ident).unwrap()),
+            ),
+            &expr,
+          );
           cmds.extend(asgn_cmds);
         }
         ast::Stmt::Return(expr) => {
           if expr.is_literal() {
-            cmds.push(IrCmd::Return(expr_from_lit(self.gen_ir_expr_for_lit(expr))));
+            cmds.push(IrCmd::Return(self.gen_ir_expr_for_lit(expr)));
             continue;
           }
-          let ret_tmp = self.get_tmp_and_incr();
+          let ret_tmp = self.get_tmp_and_incr(ret_ty);
           let mut ret_cmds = self.gen_ir_expr_and_asgn(ret_tmp.clone(), &expr);
-          ret_cmds.push(IrCmd::Return(expr_from_var(ret_tmp)));
+          ret_cmds.push(IrCmd::Return(lit_from_var(ret_tmp)));
           cmds.extend(ret_cmds);
         }
       }
@@ -73,17 +85,20 @@ impl IrGenContext {
       ast::Expr::Bool(b) => vec![IrCmd::Asgn(target, IrExpr::Literal(IrLiteral::Bool(*b)))],
       ast::Expr::Ident(ident) => vec![IrCmd::Asgn(
         target,
-        IrExpr::Literal(IrLiteral::Var(IrVar::Ident(ident.clone()))),
+        IrExpr::Literal(IrLiteral::Var(IrVar::Ident(
+          ident.clone(),
+          self.gen_ir_type(self.var_ty_map.get(ident).unwrap()),
+        ))),
       )],
       ast::Expr::Binop(op, e1_box, e2_box) => {
         if op.is_short_circuit() {
           return self.gen_ir_expr_for_short_circuit(target, *op, e1_box, e2_box);
         }
         match (&**e1_box, &**e2_box) {
-          (ast::Expr::Binop(_, _, _), ast::Expr::Binop(_, _, _)) => {
+          (ast::Expr::Binop(op1, _, _), ast::Expr::Binop(op2, _, _)) => {
             // need to generate tmps for both
-            let target1 = self.get_tmp_and_incr();
-            let target2 = self.get_tmp_and_incr();
+            let target1 = self.get_tmp_and_incr(gen_op_arg_type(*op1));
+            let target2 = self.get_tmp_and_incr(gen_op_arg_type(*op2));
             let mut cmds = self.gen_ir_expr_and_asgn(target1.clone(), e1_box);
             cmds.extend(self.gen_ir_expr_and_asgn(target2.clone(), e2_box));
             cmds.push(IrCmd::Asgn(
@@ -96,9 +111,9 @@ impl IrGenContext {
             ));
             cmds
           }
-          (ast::Expr::Binop(_, _, _), e2) => {
+          (ast::Expr::Binop(op1, _, _), e2) => {
             // only needs temps for left side
-            let target1 = self.get_tmp_and_incr();
+            let target1 = self.get_tmp_and_incr(gen_op_arg_type(*op1));
             let mut cmds = self.gen_ir_expr_and_asgn(target1.clone(), &*e1_box);
             cmds.push(IrCmd::Asgn(
               target,
@@ -110,9 +125,9 @@ impl IrGenContext {
             ));
             cmds
           }
-          (e1, ast::Expr::Binop(_, _, _)) => {
+          (e1, ast::Expr::Binop(op2, _, _)) => {
             // only needs temps for left side
-            let target1 = self.get_tmp_and_incr();
+            let target1 = self.get_tmp_and_incr(gen_op_arg_type(*op2));
             let mut cmds = self.gen_ir_expr_and_asgn(target1.clone(), &*e2_box);
             cmds.push(IrCmd::Asgn(
               target,
@@ -168,10 +183,11 @@ impl IrGenContext {
         // jump to label1 if tmp1 is true, label2 o/w
         cmds.extend(vec![cond, IrCmd::Label(label1)]);
         cmds.extend(cmds2);
+        cmds.push(IrCmd::Goto(label2));
         cmds.extend(vec![
           // value depends solely on tmp2
           IrCmd::Label(label2),
-          // we reach here only if tmp1 is false, so result of computation is falset
+          // we reach here only if tmp1 is false, so result of computation is false
         ]);
         cmds
       }
@@ -180,6 +196,7 @@ impl IrGenContext {
         let mut cmds = cmds1;
         cmds.extend(vec![cond, IrCmd::Label(label1)]);
         cmds.extend(cmds2);
+        cmds.push(IrCmd::Goto(label2));
         cmds.extend(vec![
           // value depends solely on tmp2
           IrCmd::Label(label2),
@@ -204,13 +221,16 @@ impl IrGenContext {
     match expr {
       ast::Expr::Num(n) => IrLiteral::Num(*n),
       ast::Expr::Bool(b) => IrLiteral::Bool(*b),
-      ast::Expr::Ident(ident) => IrLiteral::Var(IrVar::Ident(ident.clone())),
+      ast::Expr::Ident(ident) => IrLiteral::Var(IrVar::Ident(
+        ident.clone(),
+        self.gen_ir_type(self.var_ty_map.get(ident).unwrap()),
+      )),
       _ => panic!("impossible case ```gen_ir_expr_for_lit```, should have caught in assert"),
     }
   }
 
-  fn get_tmp_and_incr(&mut self) -> IrVar {
-    let tmp = IrVar::Temp(self.tmp_count);
+  fn get_tmp_and_incr(&mut self, ty: IrType) -> IrVar {
+    let tmp = IrVar::Temp(self.tmp_count, ty, 0);
     self.tmp_count += 1;
     tmp
   }
