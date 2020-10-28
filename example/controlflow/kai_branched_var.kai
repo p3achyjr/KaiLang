@@ -1,0 +1,12 @@
+function main(): int {
+  let a = 0;
+  let b = 1;
+
+  if (a < b) {
+    let x = 4;
+  } else {
+    let x = 5;
+  }
+
+  return x;
+}

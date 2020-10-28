@@ -14,14 +14,14 @@ fn main() -> std::io::Result<()> {
   dir.push(Path::new(filename));
   let mut file = File::open(Path::new(filename))?;
   let mut program = String::new();
-  println!("filename {:?}", filename);
-  println!("dir {:?}", dir);
+  // println!("filename {:?}", filename);
+  // println!("dir {:?}", dir);
   file.read_to_string(&mut program)?;
   // println!("program: {:?}", program);
 
   let parser = FunctionParser::new();
   let ast = parser.parse(&program).unwrap();
-  // println!("ast: {:#?}", ast);
+  println!("ast: {:#?}", ast);
   let var_ty_map = typecheck(&ast);
   let ir = ir_gen(&ast, var_ty_map);
   // println!("ir: {}", ir.to_string());

@@ -1,0 +1,10 @@
+function main(): int {
+  let v0 = 0;
+  let v1 = 1;
+
+  if v0 < v1 {
+    return v0;
+  } else {
+    return v1;
+  }
+}

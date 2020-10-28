@@ -326,9 +326,9 @@ pub unsafe fn llvm_gen(ir: &IrFunction, pathbuf: &mut PathBuf) {
   let mut err_ll = std::ptr::null_mut();
   let mut err_obj = std::ptr::null_mut();
 
-  // println!("{}", filename);
-  // println!("{:?}", filename_ll);
-  // println!("{:?}", filename_obj);
+  println!("{}", filename);
+  println!("{:?}", filename_ll);
+  println!("{:?}", filename_obj);
   pathbuf.pop();
   pathbuf.push(filename_ll);
   let did_emit_asm = llvm::target_machine::LLVMTargetMachineEmitToFile(
@@ -348,5 +348,5 @@ pub unsafe fn llvm_gen(ir: &IrFunction, pathbuf: &mut PathBuf) {
     &mut err_obj,
   );
 
-  println!("{:?}, {:?}", did_emit_asm, did_emit_obj);
+  // println!("{:?}, {:?}", did_emit_asm, did_emit_obj);
 }

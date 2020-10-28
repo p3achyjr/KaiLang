@@ -1,0 +1,8 @@
+function main(): int {
+  let a = 5;
+  let b = 6;
+
+  if (a + b) {
+    return 0;
+  }
+}

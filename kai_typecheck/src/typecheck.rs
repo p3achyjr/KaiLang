@@ -62,6 +62,13 @@ impl TypeCheckCtx {
             ident,
           );
         }
+        ast::Stmt::If(c, b, e) => {
+          let intersect_map = self.typecheck_if(var_ty_map, c, b, e, ret_ty);
+          for (var, ty) in intersect_map.iter() {
+            current_scope_var_ty_map.insert(var.clone(), ty.clone());
+            var_ty_map.insert(var.clone(), ty.clone());
+          }
+        }
         ast::Stmt::Return(expr) => {
           let expr_type = self.infer_expr_type(var_ty_map, expr);
           assert!(
@@ -74,6 +81,55 @@ impl TypeCheckCtx {
     }
 
     return current_scope_var_ty_map;
+  }
+
+  fn typecheck_if(
+    &self,
+    var_ty_map: &mut HashMap<String, ast::Type>,
+    cond: &ast::Expr,
+    if_stmts: &Vec<ast::Stmt>,
+    else_if: &ast::ElseIf,
+    ret_ty: &ast::Type,
+  ) -> HashMap<String, ast::Type> {
+    assert!(
+      self.infer_expr_type(var_ty_map, cond) == ast::Type::Bool,
+      "conditional in if block is not of type ```bool```",
+    );
+    let if_map = self.typecheck_stmt_list(if_stmts, var_ty_map, ret_ty);
+    for (var, _) in if_map.iter() {
+      // reset state
+      var_ty_map.remove(var);
+    }
+    let else_map = match else_if {
+      ast::ElseIf::Empty => HashMap::new(),
+      ast::ElseIf::Else(else_stmts) => self.typecheck_stmt_list(else_stmts, var_ty_map, ret_ty),
+      ast::ElseIf::ElseIf(c, b, e) => self.typecheck_if(var_ty_map, c, b, e, ret_ty),
+    };
+    for (var, _) in else_map.iter() {
+      // reset state
+      var_ty_map.remove(var);
+    }
+
+    let mut both_map = HashMap::new();
+    for (var, ty1) in if_map.iter() {
+      if !else_map.contains_key(var) {
+        continue;
+      }
+
+      // var is in both maps
+      let ty2 = else_map.get(var).unwrap();
+      assert!(
+        ty1 == ty2,
+        "type for var ```{:?}``` do not match in if and else blocks",
+        var
+      );
+
+      both_map.insert(var.clone(), ty1.clone());
+    }
+
+    println!("{:?}", both_map);
+
+    both_map
   }
 
   fn infer_expr_type(
@@ -102,8 +158,8 @@ impl TypeCheckCtx {
 
         Opcode::LogAnd => self.infer_log_binop(var_ty_map, op, &**e1_box, &**e2_box),
         Opcode::LogOr => self.infer_log_binop(var_ty_map, op, &**e1_box, &**e2_box),
-        Opcode::LogEq => self.infer_log_binop(var_ty_map, op, &**e1_box, &**e2_box),
-        Opcode::LogNeq => self.infer_log_binop(var_ty_map, op, &**e1_box, &**e2_box),
+        Opcode::LogEq => self.infer_poly_binop(var_ty_map, op, &**e1_box, &**e2_box),
+        Opcode::LogNeq => self.infer_poly_binop(var_ty_map, op, &**e1_box, &**e2_box),
       },
     }
   }
@@ -162,6 +218,26 @@ impl TypeCheckCtx {
     );
   }
 
+  fn infer_poly_binop(
+    &self,
+    var_ty_map: &HashMap<String, ast::Type>,
+    opcode: &Opcode,
+    expr1: &ast::Expr,
+    expr2: &ast::Expr,
+  ) -> ast::Type {
+    let ty1 = self.infer_expr_type(var_ty_map, expr1);
+    let ty2 = self.infer_expr_type(var_ty_map, expr2);
+
+    if ty1 != ty2 {
+      panic!(
+        "Error when typechecking binary operand: lhs type does not match rhs {:?}, {:?}",
+        ty1, ty2
+      );
+    }
+
+    self.op_result_ty(opcode)
+  }
+
   /*
    * Private, generic binop inference function
    *
@@ -208,5 +284,25 @@ impl TypeCheckCtx {
       "Error when checking ```{:?}``` against type ```{:?}```",
       expr, ty
     );
+  }
+
+  fn op_result_ty(&self, opcode: &Opcode) -> ast::Type {
+    match opcode {
+      Opcode::Add => ast::Type::Int,
+      Opcode::Sub => ast::Type::Int,
+      Opcode::Mul => ast::Type::Int,
+      Opcode::Div => ast::Type::Int,
+      Opcode::Mod => ast::Type::Int,
+
+      Opcode::Lt => ast::Type::Bool,
+      Opcode::Leq => ast::Type::Bool,
+      Opcode::Gt => ast::Type::Bool,
+      Opcode::Geq => ast::Type::Bool,
+
+      Opcode::LogAnd => ast::Type::Bool,
+      Opcode::LogOr => ast::Type::Bool,
+      Opcode::LogEq => ast::Type::Bool,
+      Opcode::LogNeq => ast::Type::Bool,
+    }
   }
 }

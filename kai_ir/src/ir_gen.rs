@@ -4,12 +4,19 @@ use kai_ast::ast;
 use kai_ast::ast::IsLiteral;
 use kai_common_types::ops::{IsShortCircuit, Opcode};
 
+struct BlkGenResult {
+  did_return: bool,
+  cmds: Vec<IrCmd>,
+}
+
 impl IrGenContext {
   pub fn gen_ir_function(&mut self, ast_func: &ast::Function) -> IrFunction {
     IrFunction {
       ident: ast_func.ident.clone(),
       args: self.gen_ir_funcargs(&ast_func.args),
-      body: self.gen_ir_body(&ast_func.body, self.gen_ir_type(&ast_func.ret_ty)),
+      body: self
+        .gen_ir_body(&ast_func.body, self.gen_ir_type(&ast_func.ret_ty))
+        .cmds,
       ret_ty: self.gen_ir_type(&ast_func.ret_ty),
     }
   }
@@ -38,8 +45,9 @@ impl IrGenContext {
     }
   }
 
-  fn gen_ir_body(&mut self, stmts: &Vec<ast::Stmt>, ret_ty: IrType) -> Vec<IrCmd> {
+  fn gen_ir_body(&mut self, stmts: &Vec<ast::Stmt>, ret_ty: IrType) -> BlkGenResult {
     let mut cmds = vec![];
+    let mut did_return = false;
     for stmt in stmts {
       match stmt {
         ast::Stmt::VarDecl(ident, expr) => {
@@ -62,20 +70,119 @@ impl IrGenContext {
           );
           cmds.extend(asgn_cmds);
         }
+        ast::Stmt::If(cond, blk, else_if) => {
+          let if_result = self.gen_ir_if(cond, blk, else_if, ret_ty);
+          cmds.extend(if_result.cmds);
+
+          did_return = did_return || if_result.did_return;
+        }
         ast::Stmt::Return(expr) => {
+          // !("STATEMENTS: {:?}, RETURNSSSSS", stmts);
           if expr.is_literal() {
             cmds.push(IrCmd::Return(self.gen_ir_expr_for_lit(expr)));
+            did_return = true;
             continue;
           }
           let ret_tmp = self.get_tmp_and_incr(ret_ty);
           let mut ret_cmds = self.gen_ir_expr_and_asgn(ret_tmp.clone(), &expr);
           ret_cmds.push(IrCmd::Return(lit_from_var(ret_tmp)));
           cmds.extend(ret_cmds);
+          did_return = true;
         }
       }
     }
 
-    cmds
+    BlkGenResult { did_return, cmds }
+  }
+
+  // translate if-else block into list of commands w/ branches
+  fn gen_ir_if(
+    &mut self,
+    cond: &ast::Expr,
+    if_stmts: &Vec<ast::Stmt>,
+    else_if: &ast::ElseIf,
+    ret_ty: IrType,
+  ) -> BlkGenResult {
+    let mut cmds = vec![];
+    let mut did_return = false;
+    let cond_target = self.get_tmp_and_incr(IrType::Bool);
+    let cond_cmds = self.gen_ir_expr_and_asgn(cond_target.clone(), cond);
+    let if_label = self.get_label_and_incr();
+    let else_label = self.get_label_and_incr();
+    let join_label = self.get_label_and_incr();
+
+    cmds.extend(cond_cmds);
+    cmds.push(IrCmd::Cond(
+      lit_from_var(cond_target.clone()),
+      if_label,
+      else_label,
+    ));
+    match else_if {
+      ast::ElseIf::Empty => {
+        cmds.push(IrCmd::Label(if_label));
+        let if_res = self.gen_ir_body(if_stmts, ret_ty);
+        cmds.extend(if_res.cmds);
+        cmds.extend(if if_res.did_return {
+          vec![]
+        } else {
+          vec![IrCmd::Goto(join_label), IrCmd::Label(join_label)]
+        });
+      }
+      ast::ElseIf::Else(else_stmts) => {
+        let if_res = self.gen_ir_body(if_stmts, ret_ty);
+        let else_res = self.gen_ir_body(else_stmts, ret_ty);
+
+        cmds.push(IrCmd::Label(if_label));
+        cmds.extend(if_res.cmds);
+        cmds.extend(if if_res.did_return {
+          vec![]
+        } else {
+          vec![IrCmd::Goto(join_label)]
+        });
+        cmds.push(IrCmd::Label(else_label));
+        cmds.extend(else_res.cmds);
+        cmds.extend(if else_res.did_return {
+          vec![]
+        } else {
+          vec![IrCmd::Goto(join_label)]
+        });
+        if if_res.did_return && else_res.did_return {
+          did_return = true
+        } else {
+          // if both branches return, we don't need this
+          cmds.push(IrCmd::Label(join_label));
+          did_return = false
+        }
+      }
+      ast::ElseIf::ElseIf(else_cond, else_if_stmts, else_if) => {
+        let if_res = self.gen_ir_body(if_stmts, ret_ty);
+        let else_res = self.gen_ir_if(else_cond, else_if_stmts, else_if, ret_ty);
+
+        cmds.push(IrCmd::Label(if_label));
+        cmds.extend(if_res.cmds);
+        cmds.extend(if if_res.did_return {
+          vec![]
+        } else {
+          vec![IrCmd::Goto(join_label)]
+        });
+        cmds.push(IrCmd::Label(else_label));
+        cmds.extend(else_res.cmds);
+        cmds.extend(if else_res.did_return {
+          vec![]
+        } else {
+          vec![IrCmd::Goto(join_label)]
+        });
+        if if_res.did_return && else_res.did_return {
+          did_return = true
+        } else {
+          // if both branches return, we don't need this
+          cmds.push(IrCmd::Label(join_label));
+          did_return = false
+        }
+      }
+    }
+
+    BlkGenResult { did_return, cmds }
   }
 
   // translate expression into list of commands, and assign it to target

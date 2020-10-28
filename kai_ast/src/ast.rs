@@ -19,7 +19,15 @@ pub struct FuncArg {
 pub enum Stmt {
   VarDecl(String, Expr),
   VarAsgn(String, Expr),
+  If(Expr, Vec<Stmt>, Box<ElseIf>),
   Return(Expr),
+}
+
+#[derive(Debug)]
+pub enum ElseIf {
+  Empty,
+  ElseIf(Expr, Vec<Stmt>, Box<ElseIf>),
+  Else(Vec<Stmt>),
 }
 
 #[derive(Debug)]

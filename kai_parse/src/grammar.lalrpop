@@ -2,6 +2,7 @@ use kai_ast::ast::{
   Function,
   FuncArg,
   Stmt,
+  ElseIf,
   Expr,
   Type,
 };
@@ -55,17 +56,34 @@ StmtList: Vec<Stmt> = {
 
 StmtWrapper: Stmt = {
   <s:Stmt> ";" => s,
+  <i:If> => i,
 };
 
 Stmt: Stmt = {
-  "let" <i:Ident> "=" <e:Expr> => Stmt::VarDecl(i, *e),
-  <i:Ident> "=" <e:Expr> => Stmt::VarAsgn(i, *e),
+  "let" <i:Ident> "=" <e:Expr> => Stmt::VarDecl(i, e),
+  <i:Ident> "=" <e:Expr> => Stmt::VarAsgn(i, e),
 
-  "return" <e:Expr> => Stmt::Return(*e),
+  "return" <e:Expr> => Stmt::Return(e),
 };
 
-Expr: Box<Expr> = {
-  <l: Expr> <o: OrOp> <r: AndT> => Box::new(Expr::Binop(o, l, r)),
+If: Stmt = {
+  "if" <c:Expr> <b:Block> <e:Else> =>
+    Stmt::If(c, b, Box::new(e)),
+};
+
+Else: ElseIf = {
+  () => ElseIf::Empty,
+  "else" <b:Block> => ElseIf::Else(b),
+  "else" <i:If> => {
+    match i {
+      Stmt::If(c, b, e) => ElseIf::ElseIf(c, b, e),
+      _ => panic!("Saw non-if case when parsing elseif"),
+    }
+  },
+};
+
+Expr: Expr = {
+  <l: Expr> <o: OrOp> <r: AndT> => Expr::Binop(o, Box::new(l), Box::new(r)),
   AndT,
 };
 
@@ -73,8 +91,8 @@ OrOp: Opcode = {
   "||" => Opcode::LogOr,
 };
 
-AndT: Box<Expr> = {
-  <l: AndT> <o: AndOp> <r: EqT> => Box::new(Expr::Binop(o, l, r)),
+AndT: Expr = {
+  <l: AndT> <o: AndOp> <r: EqT> => Expr::Binop(o, Box::new(l), Box::new(r)),
   EqT,
 };
 
@@ -82,8 +100,8 @@ AndOp: Opcode = {
   "&&" => Opcode::LogAnd,
 };
 
-EqT: Box<Expr> = {
-  <l: EqT> <o: EqOp> <r: CmpT> => Box::new(Expr::Binop(o, l, r)),
+EqT: Expr = {
+  <l: EqT> <o: EqOp> <r: CmpT> => Expr::Binop(o, Box::new(l), Box::new(r)),
   CmpT,
 };
 
@@ -92,8 +110,8 @@ EqOp: Opcode = {
   "!=" => Opcode::LogNeq,
 };
 
-CmpT: Box<Expr> = {
-  <l: CmpT> <o: CmpOp> <r: Arith> => Box::new(Expr::Binop(o, l, r)),
+CmpT: Expr = {
+  <l: CmpT> <o: CmpOp> <r: Arith> => Expr::Binop(o, Box::new(l), Box::new(r)),
   Arith,
 };
 
@@ -104,8 +122,8 @@ CmpOp: Opcode = {
   ">=" => Opcode::Geq,
 };
 
-Arith: Box<Expr> = {
-  <l:Arith> <o:ArithOp> <r:Factor> => Box::new(Expr::Binop(o, l, r)),
+Arith: Expr = {
+  <l:Arith> <o:ArithOp> <r:Factor> => Expr::Binop(o, Box::new(l), Box::new(r)),
   Factor,
 };
 
@@ -114,8 +132,8 @@ ArithOp: Opcode = {
   "-" => Opcode::Sub,
 };
 
-Factor: Box<Expr> = {
-  <l:Factor> <o:FactorOp> <r:Term> => Box::new(Expr::Binop(o, l, r)),
+Factor: Expr = {
+  <l:Factor> <o:FactorOp> <r:Term> => Expr::Binop(o, Box::new(l), Box::new(r)),
   Term,
 };
 
@@ -125,10 +143,10 @@ FactorOp: Opcode = {
   "%" => Opcode::Mod,
 };
 
-Term: Box<Expr> = {
-  <b:Bool> => Box::new(Expr::Bool(b)),
-  Num => Box::new(Expr::Num(<>)),
-  Ident => Box::new(Expr::Ident(<>)),
+Term: Expr = {
+  <b:Bool> => Expr::Bool(b),
+  Num => Expr::Num(<>),
+  Ident => Expr::Ident(<>),
   "(" <e:Expr> ")" => e,
 };
 

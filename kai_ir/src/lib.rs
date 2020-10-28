@@ -18,10 +18,6 @@ struct IrTempConversionContext {
   min_available_tmp: i32,
 }
 
-struct SsaGenContext {
-  tmp_var_map: HashMap<i32, ir::IrType>,
-}
-
 pub fn ir_gen(ast_func: &ast::Function, var_ty_map: HashMap<String, ast::Type>) -> ir::IrFunction {
   let mut ir_context = IrGenContext {
     tmp_count: 0,
@@ -34,12 +30,12 @@ pub fn ir_gen(ast_func: &ast::Function, var_ty_map: HashMap<String, ast::Type>) 
     basic_blocks: &mut vec![],
   };
   let (mut ir_temps, tmp_count) = convert_vars_to_temps(ir);
-  cfg.build_cfg(&ir_temps);
-  println!("{}", cfg);
-  println!("ir_temps: {}", ir_temps);
+  // cfg.build_cfg(&ir_temps);
+  // println!("{}", cfg);
+  // println!("ir_temps: {}", ir_temps);
 
-  let tmp_ty_map = ir_utils::get_tmp_to_type_map(&ir_temps);
-  ssa::gen_ssa(&mut ir_temps, &mut cfg, &tmp_ty_map, tmp_count as usize);
+  // let tmp_ty_map = ir_utils::get_tmp_to_type_map(&ir_temps);
+  // ssa::gen_ssa(&mut ir_temps, &mut cfg, &tmp_ty_map, tmp_count as usize);
 
   ir_temps
 }

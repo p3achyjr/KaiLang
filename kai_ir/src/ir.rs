@@ -191,6 +191,6 @@ impl fmt::Display for IrType {
 
 impl fmt::Display for IrLabel {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, ".label_{}", self.label)
+    write!(f, ".L{}", self.label)
   }
 }
