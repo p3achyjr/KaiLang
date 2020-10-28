@@ -41,6 +41,7 @@ pub enum Expr {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Type {
   Invalid, // used to denote an error in the typechecker (e.g. type of undeclared variable)
+  Unit,
   Int,
   Bool,
   FnType(Vec<Box<Type>>, Box<Type>),

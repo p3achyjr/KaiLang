@@ -125,8 +125,10 @@ impl IrGenContext {
         cmds.extend(if if_res.did_return {
           vec![]
         } else {
-          vec![IrCmd::Goto(join_label), IrCmd::Label(join_label)]
+          vec![IrCmd::Goto(else_label)]
         });
+
+        cmds.push(IrCmd::Label(else_label));
       }
       ast::ElseIf::Else(else_stmts) => {
         let if_res = self.gen_ir_body(if_stmts, ret_ty);

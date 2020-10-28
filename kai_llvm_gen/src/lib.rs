@@ -294,6 +294,16 @@ pub unsafe fn llvm_ir_gen(ir: &IrFunction, filename: &str) -> *mut LLVMModule {
 pub unsafe fn llvm_gen(ir: &IrFunction, pathbuf: &mut PathBuf) {
   let filename = pathbuf.file_name().unwrap().to_str().unwrap();
   let ll_module = llvm_ir_gen(ir, filename);
+
+  // let ll_pass_manager = llvm::core::LLVMCreateFunctionPassManagerForModule(ll_module);
+  // llvm::transforms::util::LLVMAddPromoteMemoryToRegisterPass(ll_pass_manager);
+
+  // let mut ll_func = llvm::core::LLVMGetFirstFunction(ll_module);
+  // while ll_func != std::ptr::null_mut() {
+  //   llvm::core::LLVMRunFunctionPassManager(ll_pass_manager, ll_func);
+  //   ll_func = llvm::core::LLVMGetNextFunction(ll_func);
+  // }
+
   let target_triple = llvm::target_machine::LLVMGetDefaultTargetTriple();
 
   llvm::target::LLVM_InitializeAllTargetInfos();
@@ -321,7 +331,7 @@ pub unsafe fn llvm_gen(ir: &IrFunction, pathbuf: &mut PathBuf) {
   llvm::target::LLVMSetModuleDataLayout(ll_module, data_layout);
   LLVMSetTarget(ll_module, target_triple);
 
-  let filename_ll = filename.to_string().replace(".kai", ".ll");
+  let filename_ll = filename.to_string().replace(".kai", ".s");
   let filename_obj = filename.to_string().replace(".kai", ".o");
   let mut err_ll = std::ptr::null_mut();
   let mut err_obj = std::ptr::null_mut();

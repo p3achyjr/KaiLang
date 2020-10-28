@@ -3,6 +3,11 @@ use kai_ast::ast;
 use kai_common_types::ops::Opcode;
 use std::collections::HashMap;
 
+struct BlkCheckResult {
+  did_return: bool,
+  type_map: HashMap<String, ast::Type>,
+}
+
 impl TypeCheckCtx {
   pub fn populate_fn_types(&mut self, ast_func: &ast::Function) {
     let func_args = &(*ast_func).args;
@@ -20,11 +25,20 @@ impl TypeCheckCtx {
 
   pub fn typecheck_function(&self, ast_func: &ast::Function) -> HashMap<String, ast::Type> {
     let mut var_ty_map = HashMap::new();
+    let mut arg_ty_map = HashMap::new();
     for arg in &ast_func.args {
       var_ty_map.insert(arg.ident.clone(), arg.ty.clone());
+      arg_ty_map.insert(arg.ident.clone(), arg.ty.clone());
     }
-    let mut body_map = self.typecheck_stmt_list(&ast_func.body, &mut var_ty_map, &ast_func.ret_ty);
-    body_map.extend(var_ty_map);
+    let body_res = self.typecheck_stmt_list(&ast_func.body, &mut var_ty_map, &ast_func.ret_ty);
+    if !(body_res.did_return && ast_func.ret_ty != ast::Type::Unit) {
+      panic!(
+        "Error when checking function `{:?}`, not all branches return",
+        ast_func.ident
+      );
+    }
+    let mut body_map = body_res.type_map;
+    body_map.extend(arg_ty_map);
     body_map
   }
 
@@ -33,8 +47,9 @@ impl TypeCheckCtx {
     stmts: &Vec<ast::Stmt>,
     var_ty_map: &mut HashMap<String, ast::Type>,
     ret_ty: &ast::Type,
-  ) -> HashMap<String, ast::Type> {
+  ) -> BlkCheckResult {
     let mut current_scope_var_ty_map = HashMap::new();
+    let mut did_return = false;
     for stmt in stmts {
       match stmt {
         ast::Stmt::VarDecl(ident, expr) => {
@@ -63,14 +78,16 @@ impl TypeCheckCtx {
           );
         }
         ast::Stmt::If(c, b, e) => {
-          let intersect_map = self.typecheck_if(var_ty_map, c, b, e, ret_ty);
-          for (var, ty) in intersect_map.iter() {
+          let if_res = self.typecheck_if(var_ty_map, c, b, e, ret_ty);
+          did_return = did_return || if_res.did_return;
+          for (var, ty) in if_res.type_map.iter() {
             current_scope_var_ty_map.insert(var.clone(), ty.clone());
             var_ty_map.insert(var.clone(), ty.clone());
           }
         }
         ast::Stmt::Return(expr) => {
           let expr_type = self.infer_expr_type(var_ty_map, expr);
+          did_return = true;
           assert!(
             expr_type == *ret_ty,
             "returning a value of a type ```{:?}``` that does not match function signature",
@@ -80,7 +97,10 @@ impl TypeCheckCtx {
       }
     }
 
-    return current_scope_var_ty_map;
+    return BlkCheckResult {
+      did_return,
+      type_map: current_scope_var_ty_map,
+    };
   }
 
   fn typecheck_if(
@@ -90,21 +110,26 @@ impl TypeCheckCtx {
     if_stmts: &Vec<ast::Stmt>,
     else_if: &ast::ElseIf,
     ret_ty: &ast::Type,
-  ) -> HashMap<String, ast::Type> {
+  ) -> BlkCheckResult {
     assert!(
       self.infer_expr_type(var_ty_map, cond) == ast::Type::Bool,
       "conditional in if block is not of type ```bool```",
     );
-    let if_map = self.typecheck_stmt_list(if_stmts, var_ty_map, ret_ty);
+    let if_res = self.typecheck_stmt_list(if_stmts, var_ty_map, ret_ty);
+    let if_map = if_res.type_map;
     for (var, _) in if_map.iter() {
       // reset state
       var_ty_map.remove(var);
     }
-    let else_map = match else_if {
-      ast::ElseIf::Empty => HashMap::new(),
+    let else_res = match else_if {
+      ast::ElseIf::Empty => BlkCheckResult {
+        did_return: false,
+        type_map: HashMap::new(),
+      },
       ast::ElseIf::Else(else_stmts) => self.typecheck_stmt_list(else_stmts, var_ty_map, ret_ty),
       ast::ElseIf::ElseIf(c, b, e) => self.typecheck_if(var_ty_map, c, b, e, ret_ty),
     };
+    let else_map = else_res.type_map;
     for (var, _) in else_map.iter() {
       // reset state
       var_ty_map.remove(var);
@@ -127,9 +152,10 @@ impl TypeCheckCtx {
       both_map.insert(var.clone(), ty1.clone());
     }
 
-    println!("{:?}", both_map);
-
-    both_map
+    BlkCheckResult {
+      did_return: if_res.did_return && else_res.did_return,
+      type_map: both_map,
+    }
   }
 
   fn infer_expr_type(
