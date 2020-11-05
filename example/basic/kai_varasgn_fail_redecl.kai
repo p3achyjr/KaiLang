@@ -1,3 +1,4 @@
+// @fail
 function main(): int {
   let x = 0;
   x = 1;

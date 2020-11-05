@@ -15,7 +15,7 @@ version = "0.1.0"
 # crate, you can skip this dependency.)
 [dependencies]
 kai_ast = {path = "../kai_ast"}
-kai_common_types = {path = "../kai_common_types"}
+kai_common = {path = "../kai_common"}
 lalrpop-util = "0.19.0"
 regex = "1"
 

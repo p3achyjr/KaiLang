@@ -10,7 +10,7 @@ use std::{
 use llvm::core::*;
 use llvm::*;
 
-use kai_common_types::ops::Opcode;
+use kai_common::ops::Opcode;
 use kai_ir::ir::*;
 
 struct KaiLlvmResult {
@@ -286,7 +286,7 @@ pub unsafe fn llvm_ir_gen(ir: &IrFunction, filename: &str) -> *mut LLVMModule {
   };
 
   let module = kai_llvm_result.gen_llvm_ir(ir);
-  LLVMDumpModule(module.llmodule);
+  // LLVMDumpModule(module.llmodule);
 
   module.llmodule
 }
@@ -336,9 +336,9 @@ pub unsafe fn llvm_gen(ir: &IrFunction, pathbuf: &mut PathBuf) {
   let mut err_ll = std::ptr::null_mut();
   let mut err_obj = std::ptr::null_mut();
 
-  println!("{}", filename);
-  println!("{:?}", filename_ll);
-  println!("{:?}", filename_obj);
+  // println!("{}", filename);
+  // println!("{:?}", filename_ll);
+  // println!("{:?}", filename_obj);
   pathbuf.pop();
   pathbuf.push(filename_ll);
   let did_emit_asm = llvm::target_machine::LLVMTargetMachineEmitToFile(

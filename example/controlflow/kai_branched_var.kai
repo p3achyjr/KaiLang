@@ -1,3 +1,4 @@
+// @expect(4)
 function main(): int {
   let a = 0;
   let b = 1;

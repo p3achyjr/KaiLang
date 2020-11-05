@@ -1,6 +1,6 @@
 use crate::TypeCheckCtx;
 use kai_ast::ast;
-use kai_common_types::ops::Opcode;
+use kai_common::ops::Opcode;
 use std::collections::HashMap;
 
 struct BlkCheckResult {
@@ -23,14 +23,17 @@ impl TypeCheckCtx {
     );
   }
 
-  pub fn typecheck_function(&self, ast_func: &ast::Function) -> HashMap<String, ast::Type> {
+  pub fn typecheck_function(
+    &self,
+    ast_func: &ast::Function,
+  ) -> Result<HashMap<String, ast::Type>, String> {
     let mut var_ty_map = HashMap::new();
     let mut arg_ty_map = HashMap::new();
     for arg in &ast_func.args {
       var_ty_map.insert(arg.ident.clone(), arg.ty.clone());
       arg_ty_map.insert(arg.ident.clone(), arg.ty.clone());
     }
-    let body_res = self.typecheck_stmt_list(&ast_func.body, &mut var_ty_map, &ast_func.ret_ty);
+    let body_res = self.typecheck_stmt_list(&ast_func.body, &mut var_ty_map, &ast_func.ret_ty)?;
     if !(body_res.did_return && ast_func.ret_ty != ast::Type::Unit) {
       panic!(
         "Error when checking function `{:?}`, not all branches return",
@@ -39,7 +42,7 @@ impl TypeCheckCtx {
     }
     let mut body_map = body_res.type_map;
     body_map.extend(arg_ty_map);
-    body_map
+    Ok(body_map)
   }
 
   fn typecheck_stmt_list(
@@ -47,38 +50,40 @@ impl TypeCheckCtx {
     stmts: &Vec<ast::Stmt>,
     var_ty_map: &mut HashMap<String, ast::Type>,
     ret_ty: &ast::Type,
-  ) -> BlkCheckResult {
+  ) -> Result<BlkCheckResult, String> {
     let mut current_scope_var_ty_map = HashMap::new();
     let mut did_return = false;
     for stmt in stmts {
       match stmt {
         ast::Stmt::VarDecl(ident, expr) => {
-          assert!(
-            !var_ty_map.contains_key(ident),
-            "variable ```{:?}``` already defined in scope",
-            ident,
-          );
-          let e_ty = self.infer_expr_type(var_ty_map, expr);
+          if var_ty_map.contains_key(ident) {
+            return Err(format!(
+              "variable ```{:?}``` already defined in scope",
+              ident,
+            ));
+          }
+          let e_ty = self.infer_expr_type(var_ty_map, expr)?;
           current_scope_var_ty_map.insert(ident.clone(), e_ty.clone());
           var_ty_map.insert((*ident).clone(), e_ty);
         }
         ast::Stmt::VarAsgn(ident, expr) => {
-          assert!(
-            var_ty_map.contains_key(ident),
-            "trying to assign variable ```{:?}``` a value, but ```{:?}``` has not been defined",
-            ident,
-            ident,
-          );
-          let e_ty = self.infer_expr_type(var_ty_map, expr);
+          if !var_ty_map.contains_key(ident) {
+            return Err(format!(
+              "trying to assign variable ```{:?}``` a value, but ```{:?}``` has not been defined",
+              ident, ident,
+            ));
+          }
+          let e_ty = self.infer_expr_type(var_ty_map, expr)?;
           let var_ty = var_ty_map.get(ident).unwrap_or(&ast::Type::Invalid);
-          assert!(
-            e_ty == *var_ty,
-            "trying to assign variable ```{:?}``` a value of a different type than was defined",
-            ident,
-          );
+          if e_ty != *var_ty {
+            return Err(format!(
+              "trying to assign variable ```{:?}``` a value of a different type than was defined",
+              ident,
+            ));
+          }
         }
         ast::Stmt::If(c, b, e) => {
-          let if_res = self.typecheck_if(var_ty_map, c, b, e, ret_ty);
+          let if_res = self.typecheck_if(var_ty_map, c, b, e, ret_ty)?;
           did_return = did_return || if_res.did_return;
           for (var, ty) in if_res.type_map.iter() {
             current_scope_var_ty_map.insert(var.clone(), ty.clone());
@@ -86,21 +91,23 @@ impl TypeCheckCtx {
           }
         }
         ast::Stmt::Return(expr) => {
-          let expr_type = self.infer_expr_type(var_ty_map, expr);
+          let expr_type = self.infer_expr_type(var_ty_map, expr)?;
           did_return = true;
-          assert!(
-            expr_type == *ret_ty,
-            "returning a value of a type ```{:?}``` that does not match function signature",
-            expr_type,
-          );
+          if expr_type != *ret_ty {
+            return Err(format!(
+              "returning a value of a type ```{:?}``` that does not match function signature",
+              expr_type,
+            ));
+          }
         }
+        ast::Stmt::Comment(_) => {}
       }
     }
 
-    return BlkCheckResult {
+    return Ok(BlkCheckResult {
       did_return,
       type_map: current_scope_var_ty_map,
-    };
+    });
   }
 
   fn typecheck_if(
@@ -110,12 +117,12 @@ impl TypeCheckCtx {
     if_stmts: &Vec<ast::Stmt>,
     else_if: &ast::ElseIf,
     ret_ty: &ast::Type,
-  ) -> BlkCheckResult {
-    assert!(
-      self.infer_expr_type(var_ty_map, cond) == ast::Type::Bool,
-      "conditional in if block is not of type ```bool```",
-    );
-    let if_res = self.typecheck_stmt_list(if_stmts, var_ty_map, ret_ty);
+  ) -> Result<BlkCheckResult, String> {
+    if self.infer_expr_type(var_ty_map, cond)? != ast::Type::Bool {
+      return Err("conditional in if block is not of type ```bool```".to_string());
+    }
+
+    let if_res = self.typecheck_stmt_list(if_stmts, var_ty_map, ret_ty)?;
     let if_map = if_res.type_map;
     for (var, _) in if_map.iter() {
       // reset state
@@ -126,8 +133,8 @@ impl TypeCheckCtx {
         did_return: false,
         type_map: HashMap::new(),
       },
-      ast::ElseIf::Else(else_stmts) => self.typecheck_stmt_list(else_stmts, var_ty_map, ret_ty),
-      ast::ElseIf::ElseIf(c, b, e) => self.typecheck_if(var_ty_map, c, b, e, ret_ty),
+      ast::ElseIf::Else(else_stmts) => self.typecheck_stmt_list(else_stmts, var_ty_map, ret_ty)?,
+      ast::ElseIf::ElseIf(c, b, e) => self.typecheck_if(var_ty_map, c, b, e, ret_ty)?,
     };
     let else_map = else_res.type_map;
     for (var, _) in else_map.iter() {
@@ -143,32 +150,36 @@ impl TypeCheckCtx {
 
       // var is in both maps
       let ty2 = else_map.get(var).unwrap();
-      assert!(
-        ty1 == ty2,
-        "type for var ```{:?}``` do not match in if and else blocks",
-        var
-      );
+      if ty1 != ty2 {
+        return Err(format!(
+          "type for var ```{:?}``` do not match in if and else blocks",
+          var,
+        ));
+      }
 
       both_map.insert(var.clone(), ty1.clone());
     }
 
-    BlkCheckResult {
+    Ok(BlkCheckResult {
       did_return: if_res.did_return && else_res.did_return,
       type_map: both_map,
-    }
+    })
   }
 
   fn infer_expr_type(
     &self,
     var_ty_map: &HashMap<String, ast::Type>,
     expr: &ast::Expr,
-  ) -> ast::Type {
+  ) -> Result<ast::Type, String> {
     match expr {
-      ast::Expr::Num(_) => ast::Type::Int,
-      ast::Expr::Bool(_) => ast::Type::Bool,
+      ast::Expr::Num(_) => Ok(ast::Type::Int),
+      ast::Expr::Bool(_) => Ok(ast::Type::Bool),
       ast::Expr::Ident(ident) => match var_ty_map.get(ident) {
-        None => panic!("Variable ```{:?}``` does not have a type in scope", ident),
-        Some(ty) => ty.clone(),
+        None => Err(format!(
+          "Variable ```{:?}``` does not have a type in scope",
+          ident
+        )),
+        Some(ty) => Ok(ty.clone()),
       },
       ast::Expr::Binop(op, e1_box, e2_box) => match op {
         Opcode::Add => self.infer_int_binop(var_ty_map, op, &**e1_box, &**e2_box),
@@ -196,7 +207,7 @@ impl TypeCheckCtx {
     opcode: &Opcode,
     expr1: &ast::Expr,
     expr2: &ast::Expr,
-  ) -> ast::Type {
+  ) -> Result<ast::Type, String> {
     return self.infer_binop(
       var_ty_map,
       opcode,
@@ -214,7 +225,7 @@ impl TypeCheckCtx {
     opcode: &Opcode,
     expr1: &ast::Expr,
     expr2: &ast::Expr,
-  ) -> ast::Type {
+  ) -> Result<ast::Type, String> {
     return self.infer_binop(
       var_ty_map,
       opcode,
@@ -232,7 +243,7 @@ impl TypeCheckCtx {
     opcode: &Opcode,
     expr1: &ast::Expr,
     expr2: &ast::Expr,
-  ) -> ast::Type {
+  ) -> Result<ast::Type, String> {
     return self.infer_binop(
       var_ty_map,
       opcode,
@@ -250,18 +261,18 @@ impl TypeCheckCtx {
     opcode: &Opcode,
     expr1: &ast::Expr,
     expr2: &ast::Expr,
-  ) -> ast::Type {
+  ) -> Result<ast::Type, String> {
     let ty1 = self.infer_expr_type(var_ty_map, expr1);
     let ty2 = self.infer_expr_type(var_ty_map, expr2);
 
     if ty1 != ty2 {
-      panic!(
+      return Err(format!(
         "Error when typechecking binary operand: lhs type does not match rhs {:?}, {:?}",
         ty1, ty2
-      );
+      ));
     }
 
-    self.op_result_ty(opcode)
+    Ok(self.op_result_ty(opcode))
   }
 
   /*
@@ -284,13 +295,13 @@ impl TypeCheckCtx {
     ty1: ast::Type,
     ty2: ast::Type,
     ty_binop: ast::Type,
-  ) -> ast::Type {
+  ) -> Result<ast::Type, String> {
     let result1 = self.check_expr_type(var_ty_map, expr1, ty1);
     let result2 = self.check_expr_type(var_ty_map, expr2, ty2);
 
     match (result1, result2) {
-      (Ok(_), Ok(_)) => ty_binop,
-      _ => panic!("Wrong types to binary operand {:?}", opcode),
+      (Ok(_), Ok(_)) => Ok(ty_binop),
+      _ => Err(format!("Wrong types to binary operand {:?}", opcode)),
     }
   }
 
@@ -300,7 +311,7 @@ impl TypeCheckCtx {
     expr: &ast::Expr,
     ty: ast::Type,
   ) -> Result<(), String> {
-    let inferred_ty = self.infer_expr_type(var_ty_map, expr);
+    let inferred_ty = self.infer_expr_type(var_ty_map, expr)?;
     // println!("{:?}, {:?}, {:?}", inferred_ty, ty, inferred_ty == ty);
     if inferred_ty == ty {
       return Ok(());

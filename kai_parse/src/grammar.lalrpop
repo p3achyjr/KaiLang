@@ -6,7 +6,7 @@ use kai_ast::ast::{
   Expr,
   Type,
 };
-use kai_common_types::ops::Opcode;
+use kai_common::ops::Opcode;
 
 grammar;
 

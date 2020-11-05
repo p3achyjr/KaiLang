@@ -1,3 +1,4 @@
+// @ignore
 function f(a: int, b: bool): bool {
   return 2 < a || b;
 }

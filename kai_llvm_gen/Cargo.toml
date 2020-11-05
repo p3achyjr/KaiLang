@@ -7,7 +7,7 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kai_common_types = {path = "../kai_common_types"}
+kai_common = {path = "../kai_common"}
 kai_ir = {path = "../kai_ir"}
 libc = "0.2"
 llvm-sys = "100"

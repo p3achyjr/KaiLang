@@ -1,3 +1,4 @@
+// @ignore
 function main(): bool {
   let a = 0;
   let b = 4;

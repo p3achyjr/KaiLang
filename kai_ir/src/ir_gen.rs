@@ -2,7 +2,7 @@ use super::IrGenContext;
 use crate::ir::*;
 use kai_ast::ast;
 use kai_ast::ast::IsLiteral;
-use kai_common_types::ops::{IsShortCircuit, Opcode};
+use kai_common::ops::{IsShortCircuit, Opcode};
 
 struct BlkGenResult {
   did_return: bool,
@@ -89,6 +89,7 @@ impl IrGenContext {
           cmds.extend(ret_cmds);
           did_return = true;
         }
+        ast::Stmt::Comment(_) => {}
       }
     }
 

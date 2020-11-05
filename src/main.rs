@@ -17,12 +17,13 @@ fn main() -> std::io::Result<()> {
   // println!("filename {:?}", filename);
   // println!("dir {:?}", dir);
   file.read_to_string(&mut program)?;
+  program = kai_common::remove_comments::remove_comments(&program).unwrap();
   // println!("program: {:?}", program);
 
   let parser = FunctionParser::new();
   let ast = parser.parse(&program).unwrap();
   println!("ast: {:#?}", ast);
-  let var_ty_map = typecheck(&ast);
+  let var_ty_map = typecheck(&ast).unwrap();
   let ir = ir_gen(&ast, var_ty_map);
   // println!("ir: {}", ir.to_string());
   unsafe {

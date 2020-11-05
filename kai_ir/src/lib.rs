@@ -25,7 +25,7 @@ pub fn ir_gen(ast_func: &ast::Function, var_ty_map: HashMap<String, ast::Type>) 
     var_ty_map,
   };
   let ir = ir_context.gen_ir_function(ast_func);
-  println!("{}", ir);
+  // println!("{}", ir);
   let mut cfg = cfg::ControlFlowGraph {
     basic_blocks: &mut vec![],
   };

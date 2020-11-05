@@ -1,4 +1,4 @@
-use kai_common_types::ops::Opcode;
+use kai_common::ops::Opcode;
 use std::fmt::Debug;
 
 #[derive(Debug)]
@@ -21,6 +21,7 @@ pub enum Stmt {
   VarAsgn(String, Expr),
   If(Expr, Vec<Stmt>, Box<ElseIf>),
   Return(Expr),
+  Comment(String),
 }
 
 #[derive(Debug)]

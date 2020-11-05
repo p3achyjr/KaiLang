@@ -1,3 +1,4 @@
+// @expect(0)
 function main(): int {
   let v0 = 0;
   let v1 = 1;

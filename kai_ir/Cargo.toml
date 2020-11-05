@@ -8,4 +8,4 @@ version = "0.1.0"
 
 [dependencies]
 kai_ast = {path = "../kai_ast"}
-kai_common_types = {path = "../kai_common_types"}
+kai_common = {path = "../kai_common"}

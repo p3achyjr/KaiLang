@@ -1,5 +1,5 @@
 use kai_ast::ast;
-use kai_common_types::ops::Opcode;
+use kai_common::ops::Opcode;
 use std::fmt;
 use std::fmt::Debug;
 

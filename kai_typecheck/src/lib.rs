@@ -9,7 +9,7 @@ struct TypeCheckCtx {
   // var_map: HashMap<String, ast::Type>,
 }
 
-pub fn typecheck(ast_func: &ast::Function) -> HashMap<String, ast::Type> {
+pub fn typecheck(ast_func: &ast::Function) -> Result<HashMap<String, ast::Type>, String> {
   let mut type_check_ctx = TypeCheckCtx {
     fn_type_map: HashMap::new(),
   };
